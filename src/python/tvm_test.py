@@ -15,7 +15,8 @@ s[C].bind(tx, te.thread_axis("threadIdx.x"))
 
 # 编译成CUDA代码
 ctx = tvm.device("cuda", 0)
-with tvm.target.cuda():
+target_str = "cuda -arch=sm_86"
+with tvm.target.Target(target_str):
     fun = tvm.build(s, [A, B, C], "cuda", name="vector_add")
     
 cuda_source = fun.imported_modules[0].get_source()
