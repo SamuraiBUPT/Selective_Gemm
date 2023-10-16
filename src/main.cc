@@ -1,6 +1,6 @@
 #include "NaiveKernel.h"
 #include "cublasOp.h"
-#include "MBMMKernel.h"
+#include "mbmmKernel.h"
 
 bool findNum(int target, int arr[], int size){
   for (int i = 0; i < size; i++) {
@@ -122,13 +122,37 @@ int main() {
     cudaMemcpy(d_input2, h_input2, size2 * sizeof(half), cudaMemcpyHostToDevice);
 
     // 1. Naive Kernel
-    for (int z = 0; z < 5; z++){
+    for (int z = 0; z < 1; z++){
       launchNaiveKernel<half>(lora_ranks, token_num, units, d_input, d_input2, d_output, lora_info);
     }
 
+    cudaMemcpy(h_output, d_output, size3 * sizeof(half), cudaMemcpyDeviceToHost);
+
+    // 打印结果，以检查kernel的正确性
+    printf("1. Naive Kernel \n");
+    for (int i = 0; i < size3; i++) {
+        if (findNum(i, segs_prefix, idxx - 1)) {
+          std::cout<< "\n idx: "<< i << std::endl;
+        }
+        std::cout << h_output[i] << " ";
+    }
+
     // 2. Block masked MBMM kernel
+    half* d_input_mbmm;
+    half* d_input_mbmm2;
+    half* d_output_mbmm;
+
+    half* h_output_mbmm = new half[size3];
+
+    cudaMalloc((void**)&d_input_mbmm, size_lora * sizeof(half));
+    cudaMalloc((void**)&d_input_mbmm2, size2 * sizeof(half));
+    cudaMalloc((void**)&d_output_mbmm, size3 * sizeof(half));
+
+    cudaMemcpy(d_input_mbmm, h_input, size_lora * sizeof(half), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_input_mbmm2, h_input2, size2 * sizeof(half), cudaMemcpyHostToDevice);
+
     for (int z = 0; z < 5; z++){
-      launchMBMMKernel<half>(lora_ranks, token_num, units, d_input, d_input2, d_output, lora_info);
+      launchMBMMKernel<half>(lora_ranks, token_num, units, d_input_mbmm, d_input_mbmm2, d_output_mbmm, lora_info);
     }
 
     cudaError_t err = cudaGetLastError();
@@ -136,16 +160,24 @@ int main() {
         std::cout << "CUDA error: " << cudaGetErrorString(err) << std::endl;
     }
 
+    printf("\n\n 2. MBMM kernel \n");
     // param: dest, src
-    cudaMemcpy(h_output, d_output, size3 * sizeof(half), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_output_mbmm, d_output_mbmm, size3 * sizeof(half), cudaMemcpyDeviceToHost);
 
     // 打印结果，以检查kernel的正确性
-    // for (int i = 0; i < size3; i++) {
-    //     if (findNum(i, segs_prefix, idxx - 1)) {
-    //       std::cout<< "\n idx: "<< i << std::endl;
-    //     }
-    //     std::cout << h_output[i] << " ";
-    // }
+    for (int i = 0; i < size3; i++) {
+        if (findNum(i, segs_prefix, idxx - 1)) {
+          std::cout<< "\n idx: "<< i << std::endl;
+        }
+        std::cout << h_output_mbmm[i] << " ";
+    }
+
+    delete[] h_output_mbmm;
+
+    cudaFree(d_input_mbmm);
+    cudaFree(d_input_mbmm2);
+    cudaFree(d_output_mbmm);
+
     std::cout << std::endl<<"I'm done." <<std::endl;
     std::cout << std::endl;
 
@@ -154,7 +186,7 @@ int main() {
     cudaFree(d_output);
 
 
-    // metric cublas kernel
+    // 3. metric cublas kernel
 
     half* h_output_cublas = new half[size3];
 
@@ -171,13 +203,15 @@ int main() {
     }
 
     cudaMemcpy(h_output_cublas, d_output_cublas, size3 * sizeof(half), cudaMemcpyDeviceToHost);
+
+    printf("3. cublas Kernel \n");
     // 打印结果，以检查kernel的正确性
-    // for (int i = 0; i < size3; i++) {
-    //     if (findNum(i, segs_prefix, idxx - 1)) {
-    //       std::cout<< "\n idx: "<< i << std::endl;
-    //     }
-    //     std::cout << h_output_cublas[i] << " ";
-    // }
+    for (int i = 0; i < size3; i++) {
+        if (findNum(i, segs_prefix, idxx - 1)) {
+          std::cout<< "\n idx: "<< i << std::endl;
+        }
+        std::cout << h_output_cublas[i] << " ";
+    }
 
 
     // 清理资源

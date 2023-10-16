@@ -1,4 +1,5 @@
 #include "mbmmKernel.h"
+#include <stdio.h>
 
 template <typename T>
 __global__ void MBMMkernel(const int          m,
@@ -11,7 +12,8 @@ __global__ void MBMMkernel(const int          m,
                     const int*           ranks)
 {
   int block_id = blockIdx.x * blockDim.x + blockIdx.y;
-  if(block_id != 0 || block_id != 4 || block_id != 8) return;
+  if(block_id != 0 && block_id != 4 && != 8) return;
+  // printf("\n block_id: %d ", block_id);
 
   // we have 16 * 4 per block
   int BLOCK_ID = block_id / 4;
@@ -27,7 +29,9 @@ __global__ void MBMMkernel(const int          m,
     }
 
     // figure out the idx of result
-    int idx = BLOCK_ID * 16 * 3 + (row - BLOCK_ID * 16) * 3 + col - BLOCK_ID * 3;
+    int judger = BLOCK_ID == 2 ?  2 : 3;
+    int idx = BLOCK_ID * 16 * 3 + (row - BLOCK_ID * 16) * judger + col - BLOCK_ID * judger;
+    // printf("%d \n", idx);
     result[idx] = sum;
   }
 } 
@@ -55,7 +59,7 @@ void launchMBMMKernel(const int          m,
   }
 
   dim3 ThreadPerBlock(16, 4);
-  dim3 BlockPerGrid(3, 3);
+  dim3 BlockPerGrid(1, 9);
 
   int* d_seg;
   int* d_rank;
